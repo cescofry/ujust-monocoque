@@ -37,7 +37,8 @@ setup-monocoque:
         echo "Creating Arch Linux container '$CONTAINER'..."
         distrobox create \
             --image docker.io/library/archlinux:latest \
-            --name "$CONTAINER"
+            --name "$CONTAINER" \
+            --init-hooks "pacman-key --init && pacman-key --populate archlinux && pacman -Sy --noconfirm archlinux-keyring"
     else
         echo "Container '$CONTAINER' already exists, skipping creation."
     fi
