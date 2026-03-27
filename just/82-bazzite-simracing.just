@@ -232,9 +232,27 @@ setup-monocoque:
         exit 1
     fi
 
-    echo "Updated $CONFIG with device: $MOZA_TTY"
+    # Ask which Moza subtype to use
     echo ""
-    echo "You can verify with: test-monocoque"
+    echo "Which Moza wheel base type do you have?"
+    echo "  1. MozaNew (Recommended) — R9/R12/R16/R21 and other recent bases"
+    echo "  2. MozaR5 — R5 base"
+    echo ""
+    read -rp "Select [1/2] (default: 1): " MOZA_TYPE
+    case "$MOZA_TYPE" in
+        2) SUBTYPE="MozaR5" ;;
+        *) SUBTYPE="MozaNew" ;;
+    esac
+
+    # Update subtype in config
+    if grep -q 'subtype' "$CONFIG" 2>/dev/null; then
+        sed -i "s|subtype.*=.*\"[^\"]*\"|subtype      = \"$SUBTYPE\"|" "$CONFIG"
+    fi
+
+    echo "Updated $CONFIG with device: $MOZA_TTY (subtype: $SUBTYPE)"
+    echo ""
+    echo "Verify your setup with: test-monocoque"
+    echo "If it doesn't work, run configure-moza again and try the other option."
     SCRIPT
     chmod +x "$SCRIPTS_DIR/configure-moza"
 
@@ -469,10 +487,10 @@ setup-monocoque:
     echo "Next steps:"
     if [ -z "$MOZA_TTY" ]; then
         echo "  1. Connect your Moza wheel base and run: configure-moza"
-        echo "  2. Close Steam and run: configure-steam-simracing"
     else
-        echo "  1. Close Steam and run: configure-steam-simracing"
+        echo "  1. Run: configure-moza"
     fi
+    echo "  2. Close Steam and run: configure-steam-simracing"
     echo ""
     echo "configure-steam-simracing will detect your installed sim racing games"
     echo "and set up launch options so that simd + monocoque + the correct bridge"

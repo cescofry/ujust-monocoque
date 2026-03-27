@@ -54,6 +54,24 @@ else
     exit 1
 fi
 
-echo "Updated $CONFIG with device: $FULL_PATH"
+# Ask which Moza subtype to use
 echo ""
-echo "You can verify with: test-monocoque"
+echo "Which Moza wheel base type do you have?"
+echo "  1. MozaNew (Recommended) — R9/R12/R16/R21 and other recent bases"
+echo "  2. MozaR5 — R5 base"
+echo ""
+read -rp "Select [1/2] (default: 1): " MOZA_TYPE
+case "$MOZA_TYPE" in
+    2) SUBTYPE="MozaR5" ;;
+    *) SUBTYPE="MozaNew" ;;
+esac
+
+# Update subtype in config
+if grep -q 'subtype' "$CONFIG" 2>/dev/null; then
+    sed -i "s|subtype.*=.*\"[^\"]*\"|subtype      = \"$SUBTYPE\"|" "$CONFIG"
+fi
+
+echo "Updated $CONFIG with device: $FULL_PATH (subtype: $SUBTYPE)"
+echo ""
+echo "Verify your setup with: test-monocoque"
+echo "If it doesn't work, run configure-moza again and try the other option."
