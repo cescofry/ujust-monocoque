@@ -168,8 +168,40 @@ setup-monocoque:
     fi
 
     # Launch the game (with or without bridge)
-    if [ "$BRIDGE" != "none" ]; then
-        SIMD_BRIDGE_EXE="$BRIDGE" "$@"
+    if [ "$BRIDGE" != "none" ] && [ -f "$BRIDGE" ]; then
+        # Find the game .exe in the args (last arg ending in .exe)
+        ARGS=("$@")
+        GAME_EXE_IDX=""
+        for i in "${!ARGS[@]}"; do
+            case "${ARGS[$i]}" in
+                *.exe) GAME_EXE_IDX=$i ;;
+            esac
+        done
+
+        if [ -n "$GAME_EXE_IDX" ]; then
+            GAME_EXE="${ARGS[$GAME_EXE_IDX]}"
+            GAME_DIR=$(dirname "$GAME_EXE")
+            GAME_NAME=$(basename "$GAME_EXE")
+            BRIDGE_NAME=$(basename "$BRIDGE")
+
+            echo "[simracing] Injecting bridge ($BRIDGE_NAME) into game session"
+
+            # Copy bridge exe into game directory so Wine can access it
+            cp -f "$BRIDGE" "$GAME_DIR/$BRIDGE_NAME"
+
+            # Create a .cmd wrapper that launches bridge + game in same Wine session
+            printf '@echo off\r\nstart /b "" "%%~dp0%s"\r\n"%%~dp0%s"\r\ntaskkill /f /im %s >nul 2>&1\r\n' \
+                "$BRIDGE_NAME" "$GAME_NAME" "$BRIDGE_NAME" \
+                > "$GAME_DIR/simracing_wrapper.cmd"
+
+            # Replace game exe with our wrapper in the launch args
+            ARGS[$GAME_EXE_IDX]="$GAME_DIR/simracing_wrapper.cmd"
+            echo "[simracing] Launching with bridge wrapper..."
+            "${ARGS[@]}"
+        else
+            echo "[simracing] WARNING: Could not find .exe in launch command"
+            "$@"
+        fi
     else
         "$@"
     fi

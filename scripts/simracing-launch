@@ -6,6 +6,13 @@ set -euo pipefail
 
 BRIDGE="${1:-none}"; shift
 
+# Kill Boxflat if running — it holds the serial port and blocks monocoque
+if pgrep -f "boxflat" >/dev/null 2>&1; then
+    echo "[simracing] Stopping Boxflat (serial port conflict)..."
+    pkill -f "boxflat" 2>/dev/null || true
+    sleep 1
+fi
+
 cleanup() {
     echo "[simracing] Game exited, stopping telemetry stack..."
     [ -n "${SIMD_PID:-}" ] && kill "$SIMD_PID" 2>/dev/null || true
@@ -35,51 +42,40 @@ else
 fi
 
 # Launch the game (with or without bridge)
-if [ "$BRIDGE" != "none" ]; then
-    # Parse Proton path and AppId from the game command so we can
-    # launch the bridge exe inside the same Wine/Proton prefix.
-    # Use $* (single string) + regex to handle spaces in paths
-    # like "Proton 10.0" or "Assetto Corsa Competizione".
-    APPID=""
-    PROTON_DIR=""
-    STEAM_ROOT=""
-    FULL_CMD="$*"
-    if [[ "$FULL_CMD" =~ AppId=([0-9]+) ]]; then
-        APPID="${BASH_REMATCH[1]}"
-    fi
-    if [[ "$FULL_CMD" =~ (.*)/steamapps/common/(.*)/proton ]]; then
-        STEAM_ROOT="${BASH_REMATCH[1]}"
-        PROTON_DIR="${STEAM_ROOT}/steamapps/common/${BASH_REMATCH[2]}"
-    fi
+if [ "$BRIDGE" != "none" ] && [ -f "$BRIDGE" ]; then
+    # Find the game .exe in the args (last arg ending in .exe)
+    ARGS=("$@")
+    GAME_EXE_IDX=""
+    for i in "${!ARGS[@]}"; do
+        case "${ARGS[$i]}" in
+            *.exe) GAME_EXE_IDX=$i ;;
+        esac
+    done
 
-    # Run the game in the background so we can launch the bridge after
-    # the Wine prefix is ready.
-    "$@" &
-    GAME_PID=$!
+    if [ -n "$GAME_EXE_IDX" ]; then
+        GAME_EXE="${ARGS[$GAME_EXE_IDX]}"
+        GAME_DIR=$(dirname "$GAME_EXE")
+        GAME_NAME=$(basename "$GAME_EXE")
+        BRIDGE_NAME=$(basename "$BRIDGE")
 
-    BRIDGE_PID=""
-    if [ -n "$APPID" ] && [ -n "$PROTON_DIR" ] && [ -n "$STEAM_ROOT" ]; then
-        COMPAT_DATA="$STEAM_ROOT/steamapps/compatdata/$APPID"
+        echo "[simracing] Injecting bridge ($BRIDGE_NAME) into game session"
 
-        echo "[simracing] Waiting for Wine prefix to initialize..."
-        for _ in $(seq 1 30); do
-            [ -d "$COMPAT_DATA/pfx" ] && break
-            sleep 1
-        done
-        sleep 5  # extra time for Wine to fully start
+        # Copy bridge exe into game directory so Wine can access it
+        cp -f "$BRIDGE" "$GAME_DIR/$BRIDGE_NAME"
 
-        echo "[simracing] Starting bridge: $(basename "$BRIDGE")"
-        STEAM_COMPAT_CLIENT_INSTALL_PATH="$STEAM_ROOT" \
-        STEAM_COMPAT_DATA_PATH="$COMPAT_DATA" \
-        "$PROTON_DIR/proton" run "$BRIDGE" &
-        BRIDGE_PID=$!
+        # Create a .cmd wrapper that launches bridge + game in same Wine session
+        printf '@echo off\r\nstart /b "" "%%~dp0%s"\r\n"%%~dp0%s"\r\ntaskkill /f /im %s >nul 2>&1\r\n' \
+            "$BRIDGE_NAME" "$GAME_NAME" "$BRIDGE_NAME" \
+            > "$GAME_DIR/simracing_wrapper.cmd"
+
+        # Replace game exe with our wrapper in the launch args
+        ARGS[$GAME_EXE_IDX]="$GAME_DIR/simracing_wrapper.cmd"
+        echo "[simracing] Launching with bridge wrapper..."
+        "${ARGS[@]}"
     else
-        echo "[simracing] WARNING: Could not detect Proton path or AppId."
-        echo "[simracing] Bridge not launched — telemetry may not work."
+        echo "[simracing] WARNING: Could not find .exe in launch command"
+        "$@"
     fi
-
-    wait $GAME_PID 2>/dev/null || true
-    [ -n "$BRIDGE_PID" ] && kill "$BRIDGE_PID" 2>/dev/null || true
 else
     "$@"
 fi
