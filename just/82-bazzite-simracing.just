@@ -347,22 +347,23 @@ setup-monocoque:
     with open(config_path, 'r') as f:
         content = f.read()
 
-    app_pattern = rf'("{appid}"[\s]*\{{[^}}]*)\}}'
+    app_pattern = r'("' + appid + r'"[\s]*\{[^}]*)\}'
     match = re.search(app_pattern, content)
 
     if match:
         block = match.group(1)
         lo_pattern = r'"LaunchOptions"\s*"[^"]*"'
+        replacement = '"LaunchOptions"\t\t"' + launch_opt + '"'
         if re.search(lo_pattern, block):
-            new_block = re.sub(lo_pattern, f'"LaunchOptions"\t\t"{launch_opt}"', block)
+            new_block = re.sub(lo_pattern, replacement, block)
         else:
-            new_block = block + f'\n\t\t\t\t\t\t\t"LaunchOptions"\t\t"{launch_opt}"'
+            new_block = block + '\n\t\t\t\t\t\t\t' + replacement
         content = content.replace(block, new_block)
         with open(config_path, 'w') as f:
             f.write(content)
-        print(f"  Configured: {appid}")
+        print("  Configured: " + appid)
     else:
-        print(f"  App {appid} not found in localconfig.vdf (may not have been launched yet)")
+        print("  App " + appid + " not found in localconfig.vdf (may not have been launched yet)")
     PYEOF
             CHANGES_MADE=1
         done
