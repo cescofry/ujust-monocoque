@@ -73,6 +73,7 @@ just --justfile just/82-bazzite-simracing.just setup-monocoque
 
 This will:
 - Check you are in the `dialout` group (needed for serial access)
+- Install a udev rule to prevent ModemManager from grabbing Moza devices
 - Create an Arch Linux distrobox container named `simracing`
 - Install `simapi-git`, `simd-git`, `monocoque-git` from AUR
 - Clone and build `simshmbridge` (not on AUR)
@@ -80,19 +81,19 @@ This will:
 - Create `~/.config/monocoque/monocoque.config`
 - Auto-detect your Moza wheel base (if connected)
 
-3. Configure your Moza wheel (if it wasn't connected during install):
+2. Configure your Moza wheel (if it wasn't connected during install):
 
 ```bash
 configure-moza
 ```
 
-4. Close Steam, then auto-configure launch options:
+3. Close Steam, then auto-configure launch options:
 
 ```bash
 configure-steam-simracing
 ```
 
-5. Launch any sim from Steam — everything starts automatically.
+4. Launch any sim from Steam — everything starts automatically.
 
 ### Manual Installation (without ujust)
 
@@ -112,10 +113,11 @@ chmod +x ~/.local/bin/{start-simd,start-monocoque,test-monocoque,simracing-launc
 
 After running `configure-steam-simracing`, just launch games from Steam. The `simracing-launch` wrapper handles everything:
 
-1. Starts `simd` inside the distrobox container
-2. Starts `monocoque play` inside the distrobox container
-3. Launches `simshmbridge.exe` alongside the game (if needed)
-4. Cleans up when the game exits
+1. Stops Boxflat if running (serial port conflict)
+2. Starts `simd` inside the distrobox container
+3. Starts `monocoque play` inside the distrobox container
+4. Injects the bridge `.exe` into the game's Wine session via a VBScript wrapper (if needed)
+5. Cleans up when the game exits
 
 ### Manual
 

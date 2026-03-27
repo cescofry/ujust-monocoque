@@ -119,7 +119,7 @@ setup-monocoque:
 
     cat > "$SCRIPTS_DIR/test-monocoque" << 'SCRIPT'
     #!/usr/bin/env bash
-    exec distrobox enter simracing -- monocoque test "$@"
+    exec distrobox enter simracing -- monocoque test -vv "$@"
     SCRIPT
     chmod +x "$SCRIPTS_DIR/test-monocoque"
 
