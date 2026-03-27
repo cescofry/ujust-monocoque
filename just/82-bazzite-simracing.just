@@ -62,9 +62,11 @@ setup-monocoque:
             rm -rf "$TMPDIR"
         fi
 
-        # Install simapi, simd, and monocoque from AUR
+        # Install AUR packages sequentially (simd depends on simapi, monocoque depends on both)
         echo "Installing AUR packages..."
-        yay -S --needed --noconfirm simapi-git simd-git monocoque-git
+        yay -S --needed --noconfirm simapi-git
+        yay -S --needed --noconfirm simd-git
+        yay -S --needed --noconfirm monocoque-git
 
         # Build simshmbridge manually (not on AUR)
         INSTALL_DIR="$HOME/.local/share/simracing"
