@@ -38,7 +38,7 @@ setup-monocoque:
         distrobox create --verbose \
             --image docker.io/library/archlinux:latest \
             --name "$CONTAINER" \
-            --init-hooks "pacman-key --init && pacman-key --populate archlinux && pacman -Sy --noconfirm archlinux-keyring"
+            --pre-init-hooks "sed -i 's/^SigLevel.*/SigLevel = Never/' /etc/pacman.conf && pacman -Sy --noconfirm archlinux-keyring && pacman-key --init && pacman-key --populate archlinux && sed -i 's/^SigLevel.*/SigLevel = Required DatabaseOptional/' /etc/pacman.conf"
     else
         echo "Container '$CONTAINER' already exists, skipping creation."
     fi
