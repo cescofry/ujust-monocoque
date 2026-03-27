@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# Telemetry pipeline diagnostic — run in background while playing.
+# Usage: ./telemetry-diagnose [duration_seconds]
+#   Defaults to 60 seconds. Outputs to /tmp/telemetry-diag.log
+
+DURATION="${1:-60}"
+LOG="/tmp/telemetry-diag.log"
+
+echo "=== Telemetry Diagnostic ===" > "$LOG"
+echo "Started: $(date)" >> "$LOG"
+echo "Duration: ${DURATION}s" >> "$LOG"
+echo "==============================" >> "$LOG"
+
+for i in $(seq 1 "$DURATION"); do
+    echo "" >> "$LOG"
+    echo "--- T+${i}s ($(date '+%H:%M:%S')) ---" >> "$LOG"
+
+    # 1. Process checks
+    SIMD_RUNNING=$(pgrep -f "^simd$" >/dev/null 2>&1 || pgrep -f "[s]imd" >/dev/null 2>&1; echo $?)
+    MONO_RUNNING=$(pgrep -f "monocoque.*play" >/dev/null 2>&1; echo $?)
+    BRIDGE_RUNNING=$(pgrep -f "acbridge" >/dev/null 2>&1; echo $?)
+    WINESERVERS=$(pgrep -c wineserver 2>/dev/null || echo 0)
+
+    echo "PROCS: simd=$([[ $SIMD_RUNNING -eq 0 ]] && echo YES || echo NO) mono=$([[ $MONO_RUNNING -eq 0 ]] && echo YES || echo NO) bridge=$([[ $BRIDGE_RUNNING -eq 0 ]] && echo YES || echo NO) wineservers=$WINESERVERS" >> "$LOG"
+
+    # 2. Shared memory file existence and sizes
+    echo -n "SHM_FILES:" >> "$LOG"
+    for f in acpmf_physics acpmf_graphics acpmf_static acpmf_crewchief SIMAPI.DAT; do
+        if [ -f "/dev/shm/$f" ]; then
+            SIZE=$(stat -c%s "/dev/shm/$f" 2>/dev/null || echo "?")
+            echo -n " $f=${SIZE}B" >> "$LOG"
+        else
+            echo -n " $f=MISSING" >> "$LOG"
+        fi
+    done
+    echo "" >> "$LOG"
+
+    # 3. Check if acpmf_physics has non-zero data (first 64 bytes)
+    if [ -f "/dev/shm/acpmf_physics" ]; then
+        PHYS_NONZERO=$(od -A n -t x1 -N 64 /dev/shm/acpmf_physics 2>/dev/null | tr -d ' \n' | sed 's/0//g' | wc -c)
+        echo "PHYSICS_DATA: first_64B_nonzero_chars=$PHYS_NONZERO" >> "$LOG"
+        # Dump first 32 bytes hex
+        echo -n "PHYSICS_HEX: " >> "$LOG"
+        od -A n -t x1 -N 32 /dev/shm/acpmf_physics 2>/dev/null | tr -s ' ' >> "$LOG"
+    fi
+
+    # 4. Check if acpmf_graphics has non-zero data
+    if [ -f "/dev/shm/acpmf_graphics" ]; then
+        GFX_NONZERO=$(od -A n -t x1 -N 64 /dev/shm/acpmf_graphics 2>/dev/null | tr -d ' \n' | sed 's/0//g' | wc -c)
+        echo "GRAPHICS_DATA: first_64B_nonzero_chars=$GFX_NONZERO" >> "$LOG"
+        echo -n "GRAPHICS_HEX: " >> "$LOG"
+        od -A n -t x1 -N 32 /dev/shm/acpmf_graphics 2>/dev/null | tr -s ' ' >> "$LOG"
+    fi
+
+    # 5. Check SIMAPI.DAT for RPM data
+    # SimData struct: rpms is typically at a known offset
+    if [ -f "/dev/shm/SIMAPI.DAT" ]; then
+        SIMAPI_NONZERO=$(od -A n -t x1 -N 128 /dev/shm/SIMAPI.DAT 2>/dev/null | tr -d ' \n' | sed 's/0//g' | wc -c)
+        echo "SIMAPI_DATA: first_128B_nonzero_chars=$SIMAPI_NONZERO" >> "$LOG"
+        echo -n "SIMAPI_HEX: " >> "$LOG"
+        od -A n -t x1 -N 64 /dev/shm/SIMAPI.DAT 2>/dev/null | tr -s ' ' >> "$LOG"
+    fi
+
+    # 6. Serial device check
+    if [ -e "/dev/ttyACM0" ]; then
+        SERIAL_PERMS=$(stat -c%a /dev/ttyACM0 2>/dev/null || echo "?")
+        echo "SERIAL: /dev/ttyACM0 exists perms=$SERIAL_PERMS" >> "$LOG"
+    else
+        echo "SERIAL: /dev/ttyACM0 MISSING" >> "$LOG"
+    fi
+
+    # 7. CPU usage of monocoque (high CPU = spinning on empty data)
+    MONO_CPU=$(ps -C monocoque -o %cpu= 2>/dev/null | tr -d ' ' || echo "N/A")
+    echo "MONO_CPU: ${MONO_CPU}%" >> "$LOG"
+
+    sleep 1
+done
+
+echo "" >> "$LOG"
+echo "=== Diagnostic Complete ===" >> "$LOG"
+echo "Ended: $(date)" >> "$LOG"
+echo "Diagnostic complete. Results in $LOG"
