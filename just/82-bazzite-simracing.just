@@ -40,10 +40,7 @@ setup-monocoque:
     UDEV_RULE="/etc/udev/rules.d/99-moza-serial.rules"
     if [ ! -f "$UDEV_RULE" ]; then
         echo "Installing udev rule to prevent ModemManager from grabbing Moza devices..."
-        sudo bash -c "cat > $UDEV_RULE" << 'UDEVRULE'
-# Prevent ModemManager from probing Moza wheel base serial devices
-ACTION=="add|change", SUBSYSTEM=="usb", ATTR{idVendor}=="346e", ENV{ID_MM_DEVICE_IGNORE}="1"
-UDEVRULE
+        echo 'ACTION=="add|change", SUBSYSTEM=="usb", ATTR{idVendor}=="346e", ENV{ID_MM_DEVICE_IGNORE}="1"' | sudo tee "$UDEV_RULE" >/dev/null
         sudo udevadm control --reload-rules
         sudo udevadm trigger
     fi
