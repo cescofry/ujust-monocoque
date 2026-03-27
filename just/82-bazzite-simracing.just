@@ -19,17 +19,33 @@ setup-monocoque:
         echo ""
     fi
 
-    # Check serial device permissions
-    if ! groups | grep -qw dialout; then
-        echo "WARNING: You are not in the 'dialout' group."
-        echo "Serial device access will fail without it. Run:"
-        echo "  sudo usermod -aG dialout $USER"
-        echo "Then log out and back in (or reboot)."
-        echo ""
-        read -rp "Continue anyway? [y/N]: " cont
-        if [[ ! "$cont" =~ ^[Yy]$ ]]; then
-            exit 1
+    # Ensure dialout group is available and user is a member
+    if ! grep -q '^dialout:' /etc/group 2>/dev/null; then
+        if grep -q '^dialout:' /usr/lib/group 2>/dev/null; then
+            echo "Adding dialout group to /etc/group (Fedora Atomic/Bazzite fix)..."
+            grep -E '^dialout:' /usr/lib/group | sudo tee -a /etc/group >/dev/null
+        else
+            echo "Creating dialout group..."
+            sudo groupadd dialout
         fi
+    fi
+    if ! groups | grep -qw dialout; then
+        echo "Adding $USER to the dialout group for serial device access..."
+        sudo usermod -aG dialout "$USER"
+        echo "NOTE: You will need to REBOOT after setup completes for serial access to work."
+        echo ""
+    fi
+
+    # Prevent ModemManager from grabbing Moza serial devices
+    UDEV_RULE="/etc/udev/rules.d/99-moza-serial.rules"
+    if [ ! -f "$UDEV_RULE" ]; then
+        echo "Installing udev rule to prevent ModemManager from grabbing Moza devices..."
+        sudo bash -c "cat > $UDEV_RULE" << 'UDEVRULE'
+# Prevent ModemManager from probing Moza wheel base serial devices
+ACTION=="add|change", SUBSYSTEM=="usb", ATTR{idVendor}=="346e", ENV{ID_MM_DEVICE_IGNORE}="1"
+UDEVRULE
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger
     fi
 
     # Create the Arch Linux container if it doesn't exist
@@ -169,18 +185,18 @@ setup-monocoque:
         exit 1
     fi
 
-    echo "Scanning /dev/serial/by-id/ for Moza wheel base..."
-    MOZA_DEV=""
+    echo "Scanning for Moza wheel base..."
+    MOZA_TTY=""
     for dev in /dev/serial/by-id/*; do
         [ -e "$dev" ] || continue
         name=$(basename "$dev")
         if [[ "$name" =~ [Mm][Oo][Zz][Aa]|[Gg][Uu][Dd][Ss][Ee][Nn] ]] && [[ "$name" =~ [Bb][Aa][Ss][Ee] ]]; then
-            MOZA_DEV="$name"
+            MOZA_TTY=$(readlink -f "$dev")
             break
         fi
     done
 
-    if [ -z "$MOZA_DEV" ]; then
+    if [ -z "$MOZA_TTY" ]; then
         echo ""
         echo "No Moza wheel base found."
         echo ""
@@ -193,27 +209,26 @@ setup-monocoque:
         exit 1
     fi
 
-    FULL_PATH="/dev/serial/by-id/$MOZA_DEV"
-    echo "Found: $FULL_PATH"
+    echo "Found: $MOZA_TTY"
 
     # Check if already configured with this device
-    if grep -q "$MOZA_DEV" "$CONFIG" 2>/dev/null; then
+    if grep -q "$MOZA_TTY" "$CONFIG" 2>/dev/null; then
         echo "monocoque config already points to this device. Nothing to do."
         exit 0
     fi
 
     # Replace placeholder or existing device path
-    if grep -q "CHANGE_ME_TO_YOUR_MOZA_BASE" "$CONFIG"; then
-        sed -i "s|CHANGE_ME_TO_YOUR_MOZA_BASE|$FULL_PATH|" "$CONFIG"
-    elif grep -q 'devpath.*=.*"/dev/serial/by-id/' "$CONFIG"; then
-        sed -i "s|devpath.*=.*\"/dev/serial/by-id/[^\"]*\"|devpath      = \"$FULL_PATH\"|" "$CONFIG"
+    if grep -q "CHANGE_ME_TO_MOZA_DEVICE" "$CONFIG"; then
+        sed -i "s|CHANGE_ME_TO_MOZA_DEVICE|$MOZA_TTY|" "$CONFIG"
+    elif grep -q 'devpath.*=.*"/dev/' "$CONFIG"; then
+        sed -i "s|devpath.*=.*\"/dev/[^\"]*\"|devpath      = \"$MOZA_TTY\"|" "$CONFIG"
     else
         echo "WARNING: Could not find devpath line to update in $CONFIG"
-        echo "Please manually set devpath to: $FULL_PATH"
+        echo "Please manually set devpath to: $MOZA_TTY"
         exit 1
     fi
 
-    echo "Updated $CONFIG with device: $FULL_PATH"
+    echo "Updated $CONFIG with device: $MOZA_TTY"
     echo ""
     echo "You can verify with: test-monocoque"
     SCRIPT
@@ -401,7 +416,8 @@ setup-monocoque:
                 device       = "Serial";
                 type         = "Wheel";
                 subtype      = "MozaNew";
-                devpath      = "/dev/serial/by-id/CHANGE_ME_TO_YOUR_MOZA_BASE";
+                devpath      = "CHANGE_ME_TO_MOZA_DEVICE";
+                baud         = 115200;
             });
         }
     );
@@ -410,20 +426,19 @@ setup-monocoque:
     fi
 
     # Auto-detect Moza device if wheel is connected
-    MOZA_DEV=""
+    MOZA_TTY=""
     for dev in /dev/serial/by-id/*; do
         [ -e "$dev" ] || continue
         name=$(basename "$dev")
         if [[ "$name" =~ [Mm][Oo][Zz][Aa]|[Gg][Uu][Dd][Ss][Ee][Nn] ]] && [[ "$name" =~ [Bb][Aa][Ss][Ee] ]]; then
-            MOZA_DEV="$name"
+            MOZA_TTY=$(readlink -f "$dev")
             break
         fi
     done
-    if [ -n "$MOZA_DEV" ]; then
-        FULL_PATH="/dev/serial/by-id/$MOZA_DEV"
-        sed -i "s|CHANGE_ME_TO_YOUR_MOZA_BASE|$FULL_PATH|" \
+    if [ -n "$MOZA_TTY" ]; then
+        sed -i "s|CHANGE_ME_TO_MOZA_DEVICE|$MOZA_TTY|" \
             "$HOME/.config/monocoque/monocoque.config"
-        echo "Auto-detected Moza base: $FULL_PATH"
+        echo "Auto-detected Moza base: $MOZA_TTY"
     else
         echo ""
         echo "WARNING: No Moza wheel base detected."
@@ -448,7 +463,7 @@ setup-monocoque:
     echo "  Config tools:   ~/.local/bin/configure-moza, configure-steam-simracing"
     echo ""
     echo "Next steps:"
-    if [ -z "$MOZA_DEV" ]; then
+    if [ -z "$MOZA_TTY" ]; then
         echo "  1. Connect your Moza wheel base and run: configure-moza"
         echo "  2. Close Steam and run: configure-steam-simracing"
     else
