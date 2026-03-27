@@ -317,38 +317,80 @@ set -euo pipefail
 
 BRIDGE="$1"; shift
 
+cleanup() {
+    echo "[simracing] Game exited, stopping telemetry stack..."
+    [ -n "${SIMD_PID:-}" ] && kill "$SIMD_PID" 2>/dev/null || true
+    [ -n "${MONO_PID:-}" ] && kill "$MONO_PID" 2>/dev/null || true
+}
+trap cleanup EXIT
+
 # Start simd if not already running
-if ! pgrep -xf ".*simd" >/dev/null 2>&1; then
+SIMD_PID=""
+if ! pgrep -f "simd" >/dev/null 2>&1; then
     echo "[simracing] Starting simd..."
     distrobox enter simracing -- simd &
     SIMD_PID=$!
-    sleep 2  # let simd initialize
+    sleep 2
 else
     echo "[simracing] simd already running."
-    SIMD_PID=""
 fi
 
 # Start monocoque if not already running
-if ! pgrep -xf ".*monocoque.*play" >/dev/null 2>&1; then
+MONO_PID=""
+if ! pgrep -f "monocoque.*play" >/dev/null 2>&1; then
     echo "[simracing] Starting monocoque..."
     distrobox enter simracing -- monocoque play &
     MONO_PID=$!
 else
     echo "[simracing] monocoque already running."
-    MONO_PID=""
 fi
 
 # Launch the game (with or without bridge)
 if [ "$BRIDGE" != "none" ]; then
-    SIMD_BRIDGE_EXE="$BRIDGE" "$@"
+    # Parse Proton path and AppId from the game command so we can
+    # launch the bridge exe inside the same Wine/Proton prefix.
+    APPID=""
+    PROTON_DIR=""
+    STEAM_ROOT=""
+    for arg in "$@"; do
+        case "$arg" in
+            *AppId=*) APPID="${arg#*AppId=}" ;;
+            */proton) PROTON_DIR="$(dirname "$arg")"
+                      STEAM_ROOT="${arg%%/steamapps/common/*}" ;;
+        esac
+    done
+
+    # Run the game in the background so we can launch the bridge after
+    # the Wine prefix is ready.
+    "$@" &
+    GAME_PID=$!
+
+    BRIDGE_PID=""
+    if [ -n "$APPID" ] && [ -n "$PROTON_DIR" ] && [ -n "$STEAM_ROOT" ]; then
+        COMPAT_DATA="$STEAM_ROOT/steamapps/compatdata/$APPID"
+
+        echo "[simracing] Waiting for Wine prefix to initialize..."
+        for _ in $(seq 1 30); do
+            [ -d "$COMPAT_DATA/pfx" ] && break
+            sleep 1
+        done
+        sleep 5  # extra time for Wine to fully start
+
+        echo "[simracing] Starting bridge: $(basename "$BRIDGE")"
+        STEAM_COMPAT_CLIENT_INSTALL_PATH="$STEAM_ROOT" \
+        STEAM_COMPAT_DATA_PATH="$COMPAT_DATA" \
+        "$PROTON_DIR/proton" run "$BRIDGE" &
+        BRIDGE_PID=$!
+    else
+        echo "[simracing] WARNING: Could not detect Proton path or AppId."
+        echo "[simracing] Bridge not launched — telemetry may not work."
+    fi
+
+    wait $GAME_PID 2>/dev/null || true
+    [ -n "$BRIDGE_PID" ] && kill "$BRIDGE_PID" 2>/dev/null || true
 else
     "$@"
 fi
-
-# Cleanup when game exits
-echo "[simracing] Game exited, stopping telemetry stack..."
-[ -n "$SIMD_PID" ] && kill "$SIMD_PID" 2>/dev/null || true
-[ -n "$MONO_PID" ] && kill "$MONO_PID" 2>/dev/null || true
 SCRIPT
     chmod +x "$HOME/.local/bin/simracing-launch"
 
