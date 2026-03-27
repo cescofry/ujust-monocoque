@@ -35,7 +35,7 @@ setup-monocoque:
     # Create the Arch Linux container if it doesn't exist
     if ! distrobox list 2>/dev/null | grep -q "$CONTAINER"; then
         echo "Creating Arch Linux container '$CONTAINER'..."
-        distrobox create \
+        distrobox create --verbose \
             --image docker.io/library/archlinux:latest \
             --name "$CONTAINER" \
             --init-hooks "pacman-key --init && pacman-key --populate archlinux && pacman -Sy --noconfirm archlinux-keyring"
@@ -44,7 +44,7 @@ setup-monocoque:
     fi
 
     # Install AUR helper and packages inside the container
-    distrobox enter "$CONTAINER" -- bash -c '
+    DBX_VERBOSE=1 distrobox enter "$CONTAINER" -- bash -c '
         set -euo pipefail
 
         # Install build dependencies
