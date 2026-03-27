@@ -38,16 +38,19 @@ fi
 if [ "$BRIDGE" != "none" ]; then
     # Parse Proton path and AppId from the game command so we can
     # launch the bridge exe inside the same Wine/Proton prefix.
+    # Use $* (single string) + regex to handle spaces in paths
+    # like "Proton 10.0" or "Assetto Corsa Competizione".
     APPID=""
     PROTON_DIR=""
     STEAM_ROOT=""
-    for arg in "$@"; do
-        case "$arg" in
-            *AppId=*) APPID="${arg#*AppId=}" ;;
-            */proton) PROTON_DIR="$(dirname "$arg")"
-                      STEAM_ROOT="${arg%%/steamapps/common/*}" ;;
-        esac
-    done
+    FULL_CMD="$*"
+    if [[ "$FULL_CMD" =~ AppId=([0-9]+) ]]; then
+        APPID="${BASH_REMATCH[1]}"
+    fi
+    if [[ "$FULL_CMD" =~ (.*)/steamapps/common/(.*)/proton ]]; then
+        STEAM_ROOT="${BASH_REMATCH[1]}"
+        PROTON_DIR="${STEAM_ROOT}/steamapps/common/${BASH_REMATCH[2]}"
+    fi
 
     # Run the game in the background so we can launch the bridge after
     # the Wine prefix is ready.
