@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# Detects the Moza wheel base serial device and configures monocoque.
+set -euo pipefail
+
+CONFIG="$HOME/.config/monocoque/monocoque.config"
+
+if [ ! -f "$CONFIG" ]; then
+    echo "ERROR: monocoque config not found at $CONFIG"
+    echo "Run 'ujust setup-monocoque' first."
+    exit 1
+fi
+
+echo "Scanning /dev/serial/by-id/ for Moza wheel base..."
+MOZA_DEV=""
+for dev in /dev/serial/by-id/*; do
+    [ -e "$dev" ] || continue
+    name=$(basename "$dev")
+    if [[ "$name" =~ [Mm][Oo][Zz][Aa]|[Gg][Uu][Dd][Ss][Ee][Nn] ]] && [[ "$name" =~ [Bb][Aa][Ss][Ee] ]]; then
+        MOZA_DEV="$name"
+        break
+    fi
+done
+
+if [ -z "$MOZA_DEV" ]; then
+    echo ""
+    echo "No Moza wheel base found."
+    echo ""
+    echo "Make sure your wheel base is:"
+    echo "  1. Plugged in via USB"
+    echo "  2. Powered on"
+    echo "  3. You are in the 'dialout' group (check with: groups | grep dialout)"
+    echo ""
+    echo "Then run this script again: configure-moza"
+    exit 1
+fi
+
+FULL_PATH="/dev/serial/by-id/$MOZA_DEV"
+echo "Found: $FULL_PATH"
+
+# Check if already configured with this device
+if grep -q "$MOZA_DEV" "$CONFIG" 2>/dev/null; then
+    echo "monocoque config already points to this device. Nothing to do."
+    exit 0
+fi
+
+# Replace placeholder or existing device path
+if grep -q "CHANGE_ME_TO_YOUR_MOZA_BASE" "$CONFIG"; then
+    sed -i "s|CHANGE_ME_TO_YOUR_MOZA_BASE|$FULL_PATH|" "$CONFIG"
+elif grep -q 'devpath.*=.*"/dev/serial/by-id/' "$CONFIG"; then
+    sed -i "s|devpath.*=.*\"/dev/serial/by-id/[^\"]*\"|devpath      = \"$FULL_PATH\"|" "$CONFIG"
+else
+    echo "WARNING: Could not find devpath line to update in $CONFIG"
+    echo "Please manually set devpath to: $FULL_PATH"
+    exit 1
+fi
+
+echo "Updated $CONFIG with device: $FULL_PATH"
+echo ""
+echo "You can verify with: test-monocoque"

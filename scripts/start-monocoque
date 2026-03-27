@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+exec distrobox enter simracing -- monocoque play "$@"

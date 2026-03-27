@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Unified sim racing launcher — starts telemetry stack and runs the game.
+# Usage: simracing-launch [bridge_exe|none] %command%
+#   bridge_exe: path to simshmbridge .exe, or "none" for games with native shm/UDP
+set -euo pipefail
+
+BRIDGE="${1:-none}"; shift
+
+cleanup() {
+    echo "[simracing] Game exited, stopping telemetry stack..."
+    [ -n "${SIMD_PID:-}" ] && kill "$SIMD_PID" 2>/dev/null || true
+    [ -n "${MONO_PID:-}" ] && kill "$MONO_PID" 2>/dev/null || true
+}
+trap cleanup EXIT
+
+# Start simd if not already running
+SIMD_PID=""
+if ! pgrep -f "simd" >/dev/null 2>&1; then
+    echo "[simracing] Starting simd..."
+    distrobox enter simracing -- simd &
+    SIMD_PID=$!
+    sleep 2
+else
+    echo "[simracing] simd already running."
+fi
+
+# Start monocoque if not already running
+MONO_PID=""
+if ! pgrep -f "monocoque.*play" >/dev/null 2>&1; then
+    echo "[simracing] Starting monocoque..."
+    distrobox enter simracing -- monocoque play &
+    MONO_PID=$!
+else
+    echo "[simracing] monocoque already running."
+fi
+
+# Launch the game (with or without bridge)
+if [ "$BRIDGE" != "none" ]; then
+    SIMD_BRIDGE_EXE="$BRIDGE" "$@"
+else
+    "$@"
+fi
