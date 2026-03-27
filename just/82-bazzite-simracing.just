@@ -37,9 +37,7 @@ setup-monocoque:
         echo "Creating Arch Linux container '$CONTAINER'..."
         distrobox create \
             --image docker.io/library/archlinux:latest \
-            --name "$CONTAINER" \
-            --additional-packages \
-            "base-devel git mingw-w64-gcc"
+            --name "$CONTAINER"
     else
         echo "Container '$CONTAINER' already exists, skipping creation."
     fi
@@ -47,6 +45,10 @@ setup-monocoque:
     # Install AUR helper and packages inside the container
     distrobox enter "$CONTAINER" -- bash -c '
         set -euo pipefail
+
+        # Install build dependencies
+        echo "Installing build dependencies..."
+        sudo pacman -Syu --needed --noconfirm base-devel git mingw-w64-gcc
 
         # Install yay (AUR helper) if not present
         if ! command -v yay &>/dev/null; then
