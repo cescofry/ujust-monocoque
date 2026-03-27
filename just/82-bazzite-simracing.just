@@ -12,20 +12,6 @@ setup-monocoque:
     echo "=== Monocoque Setup (Moza RPM Telemetry) ==="
     echo ""
 
-    # If scripts are already installed, check that the distrobox container also exists.
-    # If the container is missing, continue setup rather than assuming everything is done.
-    if [ -f "$HOME/.local/bin/start-simd" ] && [ -f "$HOME/.local/bin/start-monocoque" ]; then
-        if distrobox list 2>/dev/null | grep -q "$CONTAINER"; then
-            echo "Monocoque is already installed (scripts and container found)."
-            echo "To update, run: ujust update-monocoque"
-            exit 0
-        else
-            echo "Scripts found in ~/.local/bin but distrobox container '$CONTAINER' is missing."
-            echo "Continuing setup..."
-            echo ""
-        fi
-    fi
-
     # Ensure ~/.local/bin is in PATH
     if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
         echo "NOTE: ~/.local/bin is not in your PATH."
