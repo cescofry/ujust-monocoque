@@ -119,7 +119,7 @@ setup-monocoque:
 
     cat > "$SCRIPTS_DIR/test-monocoque" << 'SCRIPT'
     #!/usr/bin/env bash
-    exec distrobox enter simracing -- monocoque test -vv "$@"
+    exec distrobox enter simracing -- monocoque test "$@"
     SCRIPT
     chmod +x "$SCRIPTS_DIR/test-monocoque"
 
@@ -131,6 +131,13 @@ setup-monocoque:
     set -euo pipefail
 
     BRIDGE="${1:-none}"; shift
+
+    # Kill Boxflat if running — it holds the serial port and blocks monocoque
+    if pgrep -f "boxflat" >/dev/null 2>&1; then
+        echo "[simracing] Stopping Boxflat (serial port conflict)..."
+        pkill -f "boxflat" 2>/dev/null || true
+        sleep 1
+    fi
 
     cleanup() {
         echo "[simracing] Game exited, stopping telemetry stack..."
