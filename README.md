@@ -63,17 +63,13 @@ ujust-monocoque/
 
 ### On Bazzite (ujust)
 
-1. Copy the recipe file to the ujust directory:
+1. Run the recipe directly from this repo:
 
 ```bash
-sudo cp just/82-bazzite-simracing.just /usr/share/ublue-os/just/82-bazzite-simracing.just
+just --justfile just/82-bazzite-simracing.just setup-monocoque
 ```
 
-2. Run the recipe:
-
-```bash
-ujust setup-monocoque
-```
+> **Note:** Bazzite's filesystem is immutable — you cannot copy files to `/usr/share/ublue-os/just/`. Use `just --justfile` to run recipes from any writable location. If you want `ujust` integration, you can temporarily unlock the filesystem with `sudo ostree admin unlock`, but this resets on reboot.
 
 This will:
 - Check you are in the `dialout` group (needed for serial access)
@@ -200,8 +196,8 @@ shellcheck scripts/*
 ## Updating
 
 ```bash
-# Via ujust
-ujust update-monocoque
+# Via just (from repo directory)
+just --justfile just/82-bazzite-simracing.just update-monocoque
 
 # Or manually
 distrobox enter simracing -- yay -Syu --noconfirm
@@ -210,8 +206,8 @@ distrobox enter simracing -- yay -Syu --noconfirm
 ## Uninstalling
 
 ```bash
-# Via ujust (preserves config files)
-ujust remove-monocoque
+# Via just (from repo directory)
+just --justfile just/82-bazzite-simracing.just remove-monocoque
 
 # To also remove config:
 rm -rf ~/.config/monocoque/
@@ -221,13 +217,21 @@ rm -rf ~/.config/monocoque/
 
 ### For Personal Use
 
-Copy the recipe file to the ujust custom recipes directory:
+Run the recipe directly with `just`:
 
 ```bash
-sudo cp just/82-bazzite-simracing.just /usr/share/ublue-os/just/82-bazzite-simracing.just
+just --justfile just/82-bazzite-simracing.just setup-monocoque
 ```
 
-On immutable systems, this may require temporarily unlocking the filesystem or using `rpm-ostree` layering.
+Bazzite's filesystem is immutable, so you cannot copy files to `/usr/share/ublue-os/just/`. If you want `ujust` integration (so the recipe shows up in `ujust --list`), you can temporarily unlock the filesystem:
+
+```bash
+sudo ostree admin unlock
+sudo cp just/82-bazzite-simracing.just /usr/share/ublue-os/just/82-bazzite-simracing.just
+ujust setup-monocoque
+```
+
+> **Note:** `ostree admin unlock` is temporary — the overlay resets on reboot. For a persistent `ujust` integration, contribute upstream (see below) or build a custom image.
 
 ### For a Bazzite PR
 
