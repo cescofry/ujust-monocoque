@@ -74,13 +74,14 @@ setup-monocoque:
         cd "$INSTALL_DIR"
         if [ ! -d "simshmbridge" ]; then
             echo "Cloning simshmbridge..."
-            git clone "https://github.com/Spacefreak18/simshmbridge.git"
+            git clone --recurse-submodules "https://github.com/Spacefreak18/simshmbridge.git"
         else
             echo "simshmbridge already cloned, pulling latest..."
-            cd simshmbridge && git pull && cd ..
+            cd simshmbridge && git pull && git submodule update --init --recursive && cd ..
         fi
         echo "Building simshmbridge..."
         cd "$INSTALL_DIR/simshmbridge"
+        git submodule update --init --recursive
         make clean 2>/dev/null || true
         make -j$(nproc)
 
