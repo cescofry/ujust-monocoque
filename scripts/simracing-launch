@@ -63,13 +63,21 @@ if [ "$BRIDGE" != "none" ] && [ -f "$BRIDGE" ]; then
         # Copy bridge exe into game directory so Wine can access it
         cp -f "$BRIDGE" "$GAME_DIR/$BRIDGE_NAME"
 
-        # Create a .cmd wrapper that launches bridge + game in same Wine session
-        printf '@echo off\r\nstart /b "" "%%~dp0%s"\r\n"%%~dp0%s"\r\ntaskkill /f /im %s >nul 2>&1\r\n' \
-            "$BRIDGE_NAME" "$GAME_NAME" "$BRIDGE_NAME" \
-            > "$GAME_DIR/simracing_wrapper.cmd"
+        # Create a .vbs wrapper that launches bridge + game in same Wine session
+        # Uses wscript.exe (GUI host) instead of cmd.exe to avoid a console window
+        cat > "$GAME_DIR/simracing_wrapper.vbs" << VBSEOF
+Set WshShell = CreateObject("WScript.Shell")
+scriptDir = Replace(WScript.ScriptFullName, WScript.ScriptName, "")
+' Launch bridge hidden (0 = hidden window)
+WshShell.Run Chr(34) & scriptDir & "${BRIDGE_NAME}" & Chr(34), 0, False
+' Launch game and wait for it to exit
+WshShell.Run Chr(34) & scriptDir & "${GAME_NAME}" & Chr(34), 1, True
+' Kill bridge after game exits
+WshShell.Run "taskkill /f /im ${BRIDGE_NAME}", 0, True
+VBSEOF
 
         # Replace game exe with our wrapper in the launch args
-        ARGS[$GAME_EXE_IDX]="$GAME_DIR/simracing_wrapper.cmd"
+        ARGS[$GAME_EXE_IDX]="$GAME_DIR/simracing_wrapper.vbs"
         echo "[simracing] Launching with bridge wrapper..."
         "${ARGS[@]}"
     else
