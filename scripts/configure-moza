@@ -12,14 +12,16 @@ fi
 
 echo "Scanning /dev/serial/by-id/ for Moza wheel base..."
 MOZA_DEV=""
+shopt -s nocasematch
 for dev in /dev/serial/by-id/*; do
     [ -e "$dev" ] || continue
     name=$(basename "$dev")
-    if [[ "$name" =~ [Mm][Oo][Zz][Aa]|[Gg][Uu][Dd][Ss][Ee][Nn] ]] && [[ "$name" =~ [Bb][Aa][Ss][Ee] ]]; then
+    if [[ "$name" =~ moza|gudsen ]] && [[ "$name" =~ base ]]; then
         MOZA_DEV="$name"
         break
     fi
 done
+shopt -u nocasematch
 
 if [ -z "$MOZA_DEV" ]; then
     echo ""
