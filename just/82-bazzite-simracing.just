@@ -14,9 +14,9 @@ setup-monocoque:
 
     # Ensure ~/.local/bin is in PATH
     if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
-        echo "NOTE: ~/.local/bin is not in your PATH."
-        echo "Add it to your shell profile if commands are not found after install."
-        echo ""
+        echo "ERROR: ~/.local/bin is not in your PATH."
+        echo "Run: echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc && source ~/.bashrc"
+        exit 1
     fi
 
     # Ensure dialout group is available and user is a member
