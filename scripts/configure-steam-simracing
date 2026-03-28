@@ -8,17 +8,17 @@ set -euo pipefail
 INSTALL_DIR="$HOME/.local/share/simracing"
 BRIDGE_DIR="$INSTALL_DIR/simshmbridge/assets"
 
-# Known sim racing games: AppID -> "Name|bridge_exe_or_none"
+# Known sim racing games: AppID -> "Name|bridge_exe_or_none|alias"
 declare -A GAMES=(
-    [244210]="Assetto Corsa|$BRIDGE_DIR/acbridge.exe"
-    [805550]="Assetto Corsa Competizione|$BRIDGE_DIR/acbridge.exe"
-    [1066890]="Automobilista 2|$BRIDGE_DIR/pcars2bridge.exe"
-    [378860]="Project Cars 2|$BRIDGE_DIR/pcars2bridge.exe"
-    [365960]="rFactor 2|$BRIDGE_DIR/rf2bridge.exe"
-    [2069810]="Le Mans Ultimate|$BRIDGE_DIR/rf2bridge.exe"
-    [227300]="Euro Truck Simulator 2|none"
-    [270880]="American Truck Simulator|none"
-    [284160]="BeamNG.drive|none"
+    [244210]="Assetto Corsa|$BRIDGE_DIR/acbridge.exe|ac"
+    [805550]="Assetto Corsa Competizione|$BRIDGE_DIR/acbridge.exe|acc"
+    [1066890]="Automobilista 2|$BRIDGE_DIR/pcars2bridge.exe|ams2"
+    [378860]="Project Cars 2|$BRIDGE_DIR/pcars2bridge.exe|pcars2"
+    [365960]="rFactor 2|$BRIDGE_DIR/rf2bridge.exe|rf2"
+    [2069810]="Le Mans Ultimate|$BRIDGE_DIR/rf2bridge.exe|lmu"
+    [227300]="Euro Truck Simulator 2|none|ets2"
+    [270880]="American Truck Simulator|none|ats"
+    [284160]="BeamNG.drive|none|beamng"
 )
 
 # Check Steam is not running
@@ -90,10 +90,10 @@ echo "Found installed sim racing games:"
 echo ""
 for i in "${!INSTALLED_APPIDS[@]}"; do
     APPID="${INSTALLED_APPIDS[$i]}"
-    IFS='|' read -r NAME BRIDGE <<< "${GAMES[$APPID]}"
+    IFS='|' read -r NAME BRIDGE ALIAS <<< "${GAMES[$APPID]}"
     BRIDGE_LABEL="$BRIDGE"
     [ "$BRIDGE" = "none" ] && BRIDGE_LABEL="no bridge needed"
-    echo "  $((i+1)). $NAME ($BRIDGE_LABEL)"
+    echo "  $((i+1)). $NAME ($BRIDGE_LABEL) → simracing-launch-$ALIAS"
 done
 echo ""
 echo "  A. Configure all"
@@ -132,8 +132,8 @@ for USERDIR in "$STEAM_ROOT"/userdata/*/config; do
     cp "$LOCALCONFIG" "$LOCALCONFIG.bak.$(date +%Y%m%d%H%M%S)"
 
     for APPID in "${SELECTED_APPIDS[@]}"; do
-        IFS='|' read -r NAME BRIDGE <<< "${GAMES[$APPID]}"
-        LAUNCH_OPT="simracing-launch $BRIDGE %command%"
+        IFS='|' read -r NAME BRIDGE ALIAS <<< "${GAMES[$APPID]}"
+        LAUNCH_OPT="simracing-launch-$ALIAS %command%"
 
         # Use python3 to safely modify VDF
         python3 - "$LOCALCONFIG" "$APPID" "$LAUNCH_OPT" << 'PYEOF'
@@ -166,6 +166,22 @@ PYEOF
 done
 
 if [ "$CHANGES_MADE" -eq 1 ]; then
+    # Create per-game launcher aliases in ~/.local/bin
+    SCRIPTS_DIR="$HOME/.local/bin"
+    mkdir -p "$SCRIPTS_DIR"
+    echo ""
+    echo "Creating launcher aliases:"
+    for APPID in "${SELECTED_APPIDS[@]}"; do
+        IFS='|' read -r NAME BRIDGE ALIAS <<< "${GAMES[$APPID]}"
+        ALIAS_PATH="$SCRIPTS_DIR/simracing-launch-$ALIAS"
+        cat > "$ALIAS_PATH" << ALIASEOF
+#!/usr/bin/env bash
+exec simracing-launch $BRIDGE "\$@"
+ALIASEOF
+        chmod +x "$ALIAS_PATH"
+        echo "  simracing-launch-$ALIAS → simracing-launch $BRIDGE"
+    done
+
     echo ""
     echo "Steam launch options configured!"
     echo "A backup was saved as localconfig.vdf.bak.*"

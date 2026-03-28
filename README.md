@@ -52,7 +52,8 @@ ujust-monocoque/
 │   ├── test-monocoque               # Test monocoque config (verbose)
 │   ├── simracing-launch             # Unified Steam launch wrapper
 │   ├── configure-moza               # Auto-detect Moza serial device
-│   └── configure-steam-simracing    # Auto-configure Steam launch options
+│   ├── configure-steam-simracing    # Auto-configure Steam launch options
+│   └── telemetry-diagnose           # Runtime diagnostic logger
 ├── configs/
 │   └── monocoque.config             # Default monocoque config template
 ├── SIMRACING-TELEMETRY-PLAN.md      # Architecture & design document
@@ -102,7 +103,7 @@ You can run the scripts directly:
 ```bash
 # Copy scripts to ~/.local/bin/
 cp scripts/* ~/.local/bin/
-chmod +x ~/.local/bin/{start-simd,start-monocoque,test-monocoque,simracing-launch,configure-moza,configure-steam-simracing}
+chmod +x ~/.local/bin/{start-simd,start-monocoque,test-monocoque,simracing-launch,configure-moza,configure-steam-simracing,telemetry-diagnose}
 
 # Then follow the distrobox setup steps from the ujust recipe manually
 ```
@@ -134,19 +135,131 @@ start-monocoque
 
 ### Per-Game Launch Options
 
-Set automatically by `configure-steam-simracing`, or set manually in Steam:
+Set automatically by `configure-steam-simracing`, or set manually in Steam.
 
-| Game | Launch Option |
-|------|--------------|
-| Assetto Corsa | `simracing-launch ~/.local/share/simracing/simshmbridge/assets/acbridge.exe %command%` |
-| ACC | `simracing-launch ~/.local/share/simracing/simshmbridge/assets/acbridge.exe %command%` |
-| AMS2 | `simracing-launch ~/.local/share/simracing/simshmbridge/assets/pcars2bridge.exe %command%` |
-| Project Cars 2 | `simracing-launch ~/.local/share/simracing/simshmbridge/assets/pcars2bridge.exe %command%` |
-| rFactor 2 | `simracing-launch ~/.local/share/simracing/simshmbridge/assets/rf2bridge.exe %command%` |
-| LeMans Ultimate | `simracing-launch ~/.local/share/simracing/simshmbridge/assets/rf2bridge.exe %command%` |
-| ETS2 | `simracing-launch none %command%` |
-| ATS | `simracing-launch none %command%` |
-| BeamNG | `simracing-launch none %command%` |
+`configure-steam-simracing` creates per-game launcher aliases in `~/.local/bin/` and configures Steam to use them:
+
+| Game | Alias | Bridge |
+|------|-------|--------|
+| Assetto Corsa | `simracing-launch-ac` | `acbridge.exe` |
+| ACC | `simracing-launch-acc` | `acbridge.exe` |
+| AMS2 | `simracing-launch-ams2` | `pcars2bridge.exe` |
+| Project Cars 2 | `simracing-launch-pcars2` | `pcars2bridge.exe` |
+| rFactor 2 | `simracing-launch-rf2` | `rf2bridge.exe` |
+| LeMans Ultimate | `simracing-launch-lmu` | `rf2bridge.exe` |
+| ETS2 | `simracing-launch-ets2` | none |
+| ATS | `simracing-launch-ats` | none |
+| BeamNG | `simracing-launch-beamng` | none |
+
+Each alias calls `simracing-launch` with the correct bridge path. The Steam launch option for each game is set to `simracing-launch-<alias> %command%`.
+
+To set launch options manually instead (without using `configure-steam-simracing`):
+
+```
+simracing-launch <bridge_exe_path|none> %command%
+```
+
+## Scripts Reference
+
+### `start-simd`
+
+Thin wrapper that runs `simd` inside the `simracing` distrobox container. Forwards all arguments.
+
+```bash
+start-simd          # start the telemetry daemon
+start-simd --help   # show simd help
+```
+
+`simd` monitors `/dev/shm/` for game-specific shared memory files, detects which sim is running, and writes a unified `SimData` struct to `/dev/shm/SIMAPI.DAT`.
+
+### `start-monocoque`
+
+Thin wrapper that runs `monocoque play` inside the `simracing` distrobox container. Forwards all arguments.
+
+```bash
+start-monocoque     # start reading telemetry and driving LEDs
+```
+
+Reads from `/dev/shm/SIMAPI.DAT` and sends RPM LED commands to the Moza wheel base over serial. Uses the config at `~/.config/monocoque/monocoque.config`.
+
+### `test-monocoque`
+
+Thin wrapper that runs `monocoque test -vv` inside the `simracing` distrobox container. Validates the config, detects the serial device, and sends test LED patterns to the wheel.
+
+```bash
+test-monocoque      # validate config and test LED output
+```
+
+If your LEDs light up, the serial connection and config are correct.
+
+### `simracing-launch`
+
+Unified Steam launch wrapper. Starts the full telemetry stack and launches the game.
+
+```bash
+simracing-launch <bridge_exe|none> %command%
+```
+
+What it does, in order:
+
+1. **Kills Boxflat** if running — Boxflat holds the serial port and blocks monocoque
+2. **Starts `simd`** (via `start-simd`) if not already running
+3. **Starts `monocoque play`** (via `start-monocoque`) if not already running
+4. **Injects the bridge** (if a bridge `.exe` path is given, not `none`):
+   - Copies the bridge `.exe` into the game directory
+   - Creates a VBScript wrapper (`simracing_wrapper.vbs`) that launches the bridge hidden, runs the game, and kills the bridge on exit
+   - Replaces the game `.exe` in the Steam launch args with the wrapper
+5. **Launches the game** with the (possibly modified) arguments
+6. **Cleans up** on exit — kills `simd` and `monocoque` processes it started
+
+### `configure-moza`
+
+Detects the Moza wheel base serial device and updates the monocoque config.
+
+```bash
+configure-moza
+```
+
+1. Scans `/dev/serial/by-id/` for devices matching `moza`/`gudsen` + `base` (case-insensitive)
+2. If found, updates the `devpath` in `~/.config/monocoque/monocoque.config`
+3. Prompts for wheel base subtype:
+   - **MozaNew** (default) — R9, R12, R16, R21 and other recent bases
+   - **MozaR5** — R5 base
+4. Skips if the config already points to the detected device
+
+### `configure-steam-simracing`
+
+Detects installed sim racing games in Steam and configures their launch options to use the telemetry stack.
+
+```bash
+configure-steam-simracing
+```
+
+1. **Requires Steam to be closed** — Steam overwrites `localconfig.vdf` on exit, which would undo changes. Offers to close Steam if it's running.
+2. **Scans Steam library folders** for installed supported games by checking `appmanifest_*.acf` files
+3. **Shows found games** and lets you select which to configure (individual, multiple, or all)
+4. **Modifies `localconfig.vdf`** to set each game's launch option (creates a timestamped backup first)
+5. **Creates per-game launcher aliases** in `~/.local/bin/` (e.g., `simracing-launch-ac`, `simracing-launch-acc`) — each alias calls `simracing-launch` with the correct bridge path
+6. Uses Python to safely parse and modify Steam's VDF format
+
+### `telemetry-diagnose`
+
+Runtime diagnostic logger for debugging the telemetry pipeline while a game is running.
+
+```bash
+telemetry-diagnose          # run for 60 seconds (default)
+telemetry-diagnose 120      # run for 120 seconds
+```
+
+Samples the system state once per second and writes to `/tmp/telemetry-diag.log`. Each sample records:
+
+- **Process checks** — whether `simd`, `monocoque`, the bridge, and wineserver are running
+- **Shared memory files** — existence and size of `acpmf_physics`, `acpmf_graphics`, `acpmf_static`, `acpmf_crewchief`, and `SIMAPI.DAT`
+- **Data content** — hex dump of the first bytes of physics, graphics, and SIMAPI shared memory (to verify non-zero data is flowing)
+- **Serial device** — whether `/dev/ttyACM0` exists and its permissions
+- **CPU usage** — monocoque CPU percentage (high CPU on empty data indicates a spin-wait issue)
+
+Run this in a separate terminal while playing to capture a diagnostic snapshot for troubleshooting.
 
 ## Testing
 
@@ -187,6 +300,8 @@ Launch any supported game from Steam. Watch the terminal output from `simracing-
 - `simd` detects the running game
 - `monocoque` reads telemetry and drives LEDs
 - LEDs respond to RPM changes in-game
+
+If something isn't working, run `telemetry-diagnose` in a separate terminal to capture a diagnostic log at `/tmp/telemetry-diag.log`.
 
 ### 5. Script linting
 

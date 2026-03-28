@@ -194,6 +194,8 @@ remove-monocoque:
     for script in start-simd start-monocoque test-monocoque simracing-launch configure-moza configure-steam-simracing; do
         rm -f "$HOME/.local/bin/$script"
     done
+    # Remove per-game launcher aliases
+    rm -f "$HOME/.local/bin"/simracing-launch-*
     echo "Removed launcher scripts."
 
     # Remove simshmbridge source
