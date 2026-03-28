@@ -47,7 +47,7 @@ fi
 
 # Replace placeholder or existing device path
 if grep -q "CHANGE_ME_TO_YOUR_MOZA_BASE" "$CONFIG"; then
-    sed -i "s|CHANGE_ME_TO_YOUR_MOZA_BASE|$FULL_PATH|" "$CONFIG"
+    sed -i "s|CHANGE_ME_TO_YOUR_MOZA_BASE|$MOZA_DEV|" "$CONFIG"
 elif grep -q 'devpath.*=.*"/dev/serial/by-id/' "$CONFIG"; then
     sed -i "s|devpath.*=.*\"/dev/serial/by-id/[^\"]*\"|devpath      = \"$FULL_PATH\"|" "$CONFIG"
 else
