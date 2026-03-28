@@ -148,7 +148,8 @@ setup-monocoque:
     for dev in /dev/serial/by-id/*; do
         [ -e "$dev" ] || continue
         name=$(basename "$dev")
-        if [[ "$name" =~ [Mm][Oo][Zz][Aa]|[Gg][Uu][Dd][Ss][Ee][Nn] ]] && [[ "$name" =~ [Bb][Aa][Ss][Ee] ]]; then
+        lower="${name,,}"
+        if [[ "$lower" =~ moza|gudsen ]] && [[ "$lower" =~ base ]]; then
             MOZA_TTY=$(readlink -f "$dev")
             break
         fi
