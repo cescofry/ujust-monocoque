@@ -39,10 +39,36 @@ setup-monocoque:
     # Prevent ModemManager from grabbing Moza serial devices
     UDEV_RULE="/etc/udev/rules.d/99-moza-serial.rules"
     if [ ! -f "$UDEV_RULE" ]; then
-        echo "Installing udev rule to prevent ModemManager from grabbing Moza devices..."
-        echo 'ACTION=="add|change", SUBSYSTEM=="usb", ATTR{idVendor}=="346e", ENV{ID_MM_DEVICE_IGNORE}="1"' | sudo tee "$UDEV_RULE" >/dev/null
-        sudo udevadm control --reload-rules
-        sudo udevadm trigger
+        if systemctl is-active --quiet ModemManager 2>/dev/null; then
+            echo ""
+            echo "WARNING: ModemManager is currently running on your system."
+            echo "Moza wheel bases use USB serial devices that ModemManager may claim,"
+            echo "preventing monocoque from communicating with the wheel."
+            echo ""
+            echo "A udev rule can tell ModemManager to ignore Moza devices (vendor 346e)."
+            echo "This only affects Moza USB devices — other modems will work normally."
+            echo ""
+            echo "If you skip this, ModemManager may interfere with your wheel base."
+            echo ""
+            read -rp "Install udev rule to prevent ModemManager from grabbing Moza devices? [Y/n]: " mm_confirm
+            if [[ "$mm_confirm" =~ ^[Nn]$ ]]; then
+                echo ""
+                echo "Skipped udev rule. If monocoque can't talk to your wheel, run:"
+                echo "  sudo tee $UDEV_RULE <<< 'ACTION==\"add|change\", SUBSYSTEM==\"usb\", ATTR{idVendor}==\"346e\", ENV{ID_MM_DEVICE_IGNORE}=\"1\"'"
+                echo "  sudo udevadm control --reload-rules && sudo udevadm trigger"
+                echo ""
+            else
+                echo "Installing udev rule..."
+                echo 'ACTION=="add|change", SUBSYSTEM=="usb", ATTR{idVendor}=="346e", ENV{ID_MM_DEVICE_IGNORE}="1"' | sudo tee "$UDEV_RULE" >/dev/null
+                sudo udevadm control --reload-rules
+                sudo udevadm trigger
+            fi
+        else
+            # ModemManager not running — safe to install the rule silently
+            echo 'ACTION=="add|change", SUBSYSTEM=="usb", ATTR{idVendor}=="346e", ENV{ID_MM_DEVICE_IGNORE}="1"' | sudo tee "$UDEV_RULE" >/dev/null
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger
+        fi
     fi
 
     # Create the Arch Linux container if it doesn't exist
