@@ -23,10 +23,23 @@ declare -A GAMES=(
 
 # Check Steam is not running
 if pgrep -x steam >/dev/null 2>&1; then
-    echo "ERROR: Steam is currently running."
-    echo "Please close Steam completely and run this script again."
-    echo "(Steam overwrites localconfig.vdf on exit, which would undo our changes.)"
-    exit 1
+    echo "Steam is currently running."
+    echo "It must be closed before configuring launch options, because Steam"
+    echo "overwrites localconfig.vdf on exit, which would undo our changes."
+    echo ""
+    read -rp "Would you like to close Steam now? [Y/n]: " steam_confirm
+    if [[ "$steam_confirm" =~ ^[Nn]$ ]]; then
+        echo "Please close Steam manually and run this script again."
+        exit 1
+    fi
+    echo "Closing Steam..."
+    pkill -x steam
+    # Wait for Steam to fully exit
+    while pgrep -x steam >/dev/null 2>&1; do
+        sleep 1
+    done
+    echo "Steam closed."
+    echo ""
 fi
 
 # Find Steam userdata directories
