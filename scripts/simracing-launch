@@ -24,7 +24,7 @@ trap cleanup EXIT
 SIMD_PID=""
 if ! pgrep -f "simd" >/dev/null 2>&1; then
     echo "[simracing] Starting simd..."
-    distrobox enter simracing -- simd &
+    start-simd &
     SIMD_PID=$!
     sleep 2
 else
@@ -35,7 +35,7 @@ fi
 MONO_PID=""
 if ! pgrep -f "monocoque.*play" >/dev/null 2>&1; then
     echo "[simracing] Starting monocoque..."
-    distrobox enter simracing -- monocoque play &
+    start-monocoque &
     MONO_PID=$!
 else
     echo "[simracing] monocoque already running."

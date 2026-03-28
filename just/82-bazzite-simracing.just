@@ -143,29 +143,6 @@ setup-monocoque:
         echo "Created monocoque config at ~/.config/monocoque/monocoque.config"
     fi
 
-    # Auto-detect Moza device if wheel is connected
-    MOZA_TTY=""
-    for dev in /dev/serial/by-id/*; do
-        [ -e "$dev" ] || continue
-        name=$(basename "$dev")
-        lower="${name,,}"
-        if [[ "$lower" =~ moza|gudsen ]] && [[ "$lower" =~ base ]]; then
-            MOZA_TTY=$(readlink -f "$dev")
-            break
-        fi
-    done
-    if [ -n "$MOZA_TTY" ]; then
-        sed -i "s|/dev/serial/by-id/CHANGE_ME_TO_YOUR_MOZA_BASE|$MOZA_TTY|" \
-            "$HOME/.config/monocoque/monocoque.config"
-        echo "Auto-detected Moza base: $MOZA_TTY"
-    else
-        echo ""
-        echo "WARNING: No Moza wheel base detected."
-        echo "  Connect and power on your wheel base, then run:"
-        echo "    configure-moza"
-        echo ""
-    fi
-
     echo ""
     echo "============================================"
     echo "  Monocoque installed!"
@@ -182,11 +159,7 @@ setup-monocoque:
     echo "  Config tools:   ~/.local/bin/configure-moza, configure-steam-simracing"
     echo ""
     echo "Next steps:"
-    if [ -z "$MOZA_TTY" ]; then
-        echo "  1. Connect your Moza wheel base and run: configure-moza"
-    else
-        echo "  1. Run: configure-moza"
-    fi
+    echo "  1. Connect your Moza wheel base and run: configure-moza"
     echo "  2. Close Steam and run: configure-steam-simracing"
     echo ""
     echo "configure-steam-simracing will detect your installed sim racing games"
