@@ -6,7 +6,7 @@ CONFIG="$HOME/.config/monocoque/monocoque.config"
 
 if [ ! -f "$CONFIG" ]; then
     echo "ERROR: monocoque config not found at $CONFIG"
-    echo "Run 'ujust setup-monocoque' first."
+    echo "Install monocoque first. See: https://github.com/Spacefreak18/monocoque"
     exit 1
 fi
 
